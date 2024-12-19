@@ -73,6 +73,7 @@ class TableDriven;
 
 template <typename Key, typename T>
 class MapFieldLite;
+class MapFieldBase;
 
 template <typename Derived, typename Key, typename T,
           WireFormatLite::FieldType key_wire_type,
@@ -339,13 +340,16 @@ class PROTOBUF_EXPORT UntypedMapBase {
     return reinterpret_cast<T*>(node->GetVoidKey());
   }
 
+  void* GetVoidValue(NodeBase* node) const {
+    return reinterpret_cast<char*>(node) + type_info_.value_offset;
+  }
+
   template <typename T>
   T* GetValue(NodeBase* node) const {
     // Debug check that `T` matches what we expect from the type info.
     ABSL_DCHECK_EQ(static_cast<int>(StaticTypeKind<T>()),
                    static_cast<int>(type_info_.value_type));
-    return reinterpret_cast<T*>(reinterpret_cast<char*>(node) +
-                                type_info_.value_offset);
+    return reinterpret_cast<T*>(GetVoidValue(node));
   }
 
   void ClearTable(bool reset, void (*destroy)(NodeBase*)) {
@@ -360,7 +364,7 @@ class PROTOBUF_EXPORT UntypedMapBase {
 
  protected:
   // 16 bytes is the minimum useful size for the array cache in the arena.
-  enum : map_index_t { kMinTableSize = 16 / sizeof(void*) };
+  static constexpr map_index_t kMinTableSize = 16 / sizeof(void*);
 
  public:
   Arena* arena() const { return arena_; }
@@ -401,6 +405,7 @@ class PROTOBUF_EXPORT UntypedMapBase {
   void VisitAllNodes(F f) const;
 
  protected:
+  friend class MapFieldBase;
   friend class TcParser;
   friend struct MapTestPeer;
   friend struct MapBenchmarkPeer;
@@ -434,12 +439,6 @@ class PROTOBUF_EXPORT UntypedMapBase {
     // Doing modulo with a prime mixes the bits more.
     return absl::HashOf(node, table_) % 13 > 6;
 #endif
-  }
-
-  // Return a power of two no less than max(kMinTableSize, n).
-  // Assumes either n < kMinTableSize or n is a power of two.
-  map_index_t TableSize(map_index_t n) {
-    return n < kMinTableSize ? kMinTableSize : n;
   }
 
   // Alignment of the nodes is the same as alignment of NodeBase.
@@ -674,6 +673,7 @@ class KeyMapBase : public UntypedMapBase {
   using KeyNode = internal::KeyNode<Key>;
 
  protected:
+  friend class MapFieldBase;
   friend class TcParser;
   friend struct MapTestPeer;
   friend struct MapBenchmarkPeer;
@@ -726,6 +726,7 @@ class KeyMapBase : public UntypedMapBase {
   }
 
   NodeAndBucket FindHelper(typename TS::ViewType k) const {
+    AssertLoadFactor();
     map_index_t b = BucketNumber(k);
     for (auto* node = table_[b]; node != nullptr; node = node->next) {
       if (TS::ToView(static_cast<KeyNode*>(node)->key()) == k) {
@@ -764,6 +765,7 @@ class KeyMapBase : public UntypedMapBase {
     // or whatever.  But it's probably cheap enough to recompute that here;
     // it's likely that we're inserting into an empty or short list.
     ABSL_DCHECK(FindHelper(TS::ToView(node->key())).node == nullptr);
+    AssertLoadFactor();
     auto*& head = table_[b];
     if (head == nullptr) {
       head = node;
@@ -788,6 +790,10 @@ class KeyMapBase : public UntypedMapBase {
     //    tables and saves memory.
     //  - Otherwise, make it 75% of num_buckets_.
     return num_buckets - num_buckets / 16 * 4 - num_buckets % 2;
+  }
+
+  void AssertLoadFactor() const {
+    ABSL_DCHECK_LE(num_elements_, CalculateHiCutoff(num_buckets_));
   }
 
   // Returns whether it did resize.  Currently this is only used when
@@ -816,7 +822,8 @@ class KeyMapBase : public UntypedMapBase {
       // So, estimate how much to shrink by making sure we don't shrink so
       // much that we would need to grow the table after a few inserts.
       const size_type hypothetical_size = new_size * 5 / 4 + 1;
-      while ((hypothetical_size << lg2_of_size_reduction_factor) < hi_cutoff) {
+      while ((hypothetical_size << (1 + lg2_of_size_reduction_factor)) <
+             hi_cutoff) {
         ++lg2_of_size_reduction_factor;
       }
       size_type new_num_buckets = std::max<size_type>(
@@ -834,6 +841,7 @@ class KeyMapBase : public UntypedMapBase {
     if (num_buckets_ == kGlobalEmptyTableSize) {
       // This is the global empty array.
       // Just overwrite with a new one. No need to transfer or free anything.
+      ABSL_DCHECK_GE(kMinTableSize, new_num_buckets);
       num_buckets_ = index_of_first_non_null_ = kMinTableSize;
       table_ = CreateEmptyTable(num_buckets_);
       return;
@@ -855,6 +863,7 @@ class KeyMapBase : public UntypedMapBase {
       }
     }
     DeleteTable(old_table, old_table_size);
+    AssertLoadFactor();
   }
 
   map_index_t BucketNumber(typename TS::ViewType k) const {
@@ -981,6 +990,7 @@ class Map : private internal::KeyMapBase<internal::KeyForBase<Key>> {
     // won't trigger for leaked maps that never get destructed.
     StaticValidityCheck();
 
+    this->AssertLoadFactor();
     this->ClearTable(false, this->template GetDestroyNode<Node>());
   }
 

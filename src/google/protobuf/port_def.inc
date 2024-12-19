@@ -157,6 +157,11 @@ static_assert(PROTOBUF_ABSL_MIN(20230125, 3),
 #define PROTOBUF_FUTURE_STRING_VIEW_RETURN_TYPE 1
 #endif
 
+#ifdef PROTOBUF_FUTURE_STRING_VIEW_RETURN_TYPE_TYPENAME
+#error PROTOBUF_FUTURE_STRING_VIEW_RETURN_TYPE_TYPENAME was previously defined
+#endif
+#define PROTOBUF_FUTURE_STRING_VIEW_RETURN_TYPE_TYPENAME 1
+
 #ifdef PROTOBUF_ALWAYS_INLINE
 #error PROTOBUF_ALWAYS_INLINE was previously defined
 #endif
@@ -624,6 +629,13 @@ static_assert(PROTOBUF_ABSL_MIN(20230125, 3),
 #pragma push_macro("linux")
 #undef linux
 #define PROTOBUF_DID_UNDEF_LINUX
+#endif
+
+// netdb.h defines this on some platforms.
+#ifdef NO_DATA
+#pragma push_macro("NO_DATA")
+#undef NO_DATA
+#define PROTOBUF_DID_UNDEF_NO_DATA
 #endif
 
 // Windows declares several inconvenient macro names.  We #undef them and then

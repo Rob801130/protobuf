@@ -71,6 +71,8 @@
 #undef PROTOBUF_FUTURE_REMOVE_CREATEMESSAGE
 #endif
 
+#undef PROTOBUF_FUTURE_STRING_VIEW_RETURN_TYPE_TYPENAME
+
 // Restore macros that may have been #undef'd in port_def.inc.
 
 #ifdef PROTOBUF_DID_UNDEF_noreturn
@@ -95,6 +97,11 @@
 
 #ifdef PROTOBUF_DID_UNDEF_LINUX
 #pragma pop_macro("linux")
+#endif
+
+#ifdef PROTOBUF_DID_UNDEF_NO_DATA
+#pragma pop_macro("NO_DATA")
+#undef PROTOBUF_DID_UNDEF_NO_DATA
 #endif
 
 #ifdef _WIN32

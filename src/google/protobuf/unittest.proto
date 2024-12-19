@@ -309,14 +309,6 @@ enum ForeignEnum {
   FOREIGN_LARGE = 123456; // Large enough to escape the Boxed Integer cache.
 }
 
-enum TestDeprecatedEnum {
-  option deprecated = true;
-
-  TEST_DEPRECATED_ENUM_UNSPECIFIED = 0;
-  TEST_DEPRECATED_ENUM_VALUE1 = 1;
-  TEST_DEPRECATED_ENUM_VALUE2 = 2;
-}
-
 message TestReservedFields {
   reserved 2, 15, 9 to 11;
 
@@ -508,13 +500,6 @@ extend TestAllExtensions {
   TestAllTypes.NestedMessage oneof_nested_message_extension = 112;
   string oneof_string_extension = 113;
   bytes oneof_bytes_extension = 114;
-
-  string optional_utf8_string_extension = 115 [
-    features.utf8_validation = VERIFY
-  ];
-  repeated string repeated_utf8_string_extension = 116 [
-    features.utf8_validation = VERIFY
-  ];
 }
 
 message OptionalGroup_extension {

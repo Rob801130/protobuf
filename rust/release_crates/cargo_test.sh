@@ -40,15 +40,15 @@ mkdir $CRATE_ROOT
 PROTOBUF_TAR=$(rlocation com_google_protobuf/rust/release_crates/protobuf/protobuf_crate.tar)
 
 echo "Expanding protobuf crate tar"
-tar -xvf $PROTOBUF_TAR -C $CRATE_ROOT 
+tar -xvf $PROTOBUF_TAR -C $CRATE_ROOT
 
 CODEGEN_ROOT=$TMP_DIR/protobuf_codegen
 mkdir $CODEGEN_ROOT
 
 CODEGEN_TAR=$(rlocation com_google_protobuf/rust/release_crates/protobuf_codegen/protobuf_codegen_crate.tar)
 
-echo "Expanding protbuf_codegen crate tar"
-tar -xvf $CODEGEN_TAR -C $CODEGEN_ROOT 
+echo "Expanding protobuf_codegen crate tar"
+tar -xvf $CODEGEN_TAR -C $CODEGEN_ROOT
 
 EXAMPLE_ROOT=$TMP_DIR/protobuf_example
 mkdir $EXAMPLE_ROOT
@@ -56,7 +56,19 @@ mkdir $EXAMPLE_ROOT
 EXAMPLE_TAR=$(rlocation com_google_protobuf/rust/release_crates/protobuf_example/protobuf_example_crate.tar)
 
 echo "Expanding protobuf_example crate tar"
-tar -xvf $EXAMPLE_TAR -C $EXAMPLE_ROOT 
+tar -xvf $EXAMPLE_TAR -C $EXAMPLE_ROOT
+
+WELL_KNOWN_TYPES_ROOT=$TMP_DIR/protobuf_well_known_types
+mkdir $WELL_KNOWN_TYPES_ROOT
+
+WELL_KNOWN_TYPES_TAR=$(rlocation com_google_protobuf/rust/release_crates/protobuf_well_known_types/crate.tar)
+
+echo "Expanding protobuf_well_known_types crate tar"
+tar -xvf $WELL_KNOWN_TYPES_TAR -C $WELL_KNOWN_TYPES_ROOT
+
+# Put the Bazel-built protoc and plugin at the beginning of $PATH
+PATH=$(dirname $(rlocation com_google_protobuf/protoc)):$PATH
+PATH=$(dirname $(rlocation com_google_protobuf/upb_generator/minitable/protoc-gen-upb_minitable)):$PATH
 
 cd $CRATE_ROOT
 CARGO_HOME=$CARGO_HOME cargo test
@@ -67,7 +79,11 @@ CARGO_HOME=$CARGO_HOME cargo test
 CARGO_HOME=$CARGO_HOME cargo publish --dry-run
 
 cd $EXAMPLE_ROOT
-CARGO_HOME=$CARGO_HOME cargo test --features run-protobuf-codegen
+CARGO_HOME=$CARGO_HOME cargo test
+
+cd $WELL_KNOWN_TYPES_ROOT
+CARGO_HOME=$CARGO_HOME cargo test
+
 # TODO: Cannot enable this dry-run yet because it checks that the versions of
 # its dependencies are published on crates.io, which they are definitely not
 # in this case.
