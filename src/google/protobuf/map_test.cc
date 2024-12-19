@@ -69,6 +69,7 @@ using ::testing::FieldsAre;
 using ::testing::Ge;
 using ::testing::Le;
 using ::testing::UnorderedElementsAre;
+using ::testing::UnorderedElementsAreArray;
 
 
 TEST(MapTest, CopyConstructIntegers) {
@@ -173,6 +174,18 @@ TEST(MapTest, CopyConstructMessagesWithArena) {
   EXPECT_EQ(map1["2"].GetArena(), &arena);
 }
 
+TEST(MapTest, CopyConstructionMaintainsProperLoadFactor) {
+  Map<int, int> original;
+  for (size_t size = 1; size < 50; ++size) {
+    // Add one element.
+    original[size];
+    Map<int, int> copy = original;
+    ASSERT_THAT(copy, UnorderedElementsAreArray(original));
+    EXPECT_LE(copy.size(),
+              MapTestPeer::CalculateHiCutoff(MapTestPeer::NumBuckets(copy)));
+  }
+}
+
 TEST(MapTest, AlwaysSerializesBothEntries) {
   for (const Message* prototype :
        {static_cast<const Message*>(
@@ -259,6 +272,27 @@ TEST(MapTest, NaturalGrowthOnArenasReuseBlocks) {
   // Use a 2% slack for other overhead. If we were not reusing the blocks, the
   // actual value would be ~2x the cost of the bucket array.
   EXPECT_THAT(arena.SpaceUsed(), AllOf(Ge(expected), Le(1.02 * expected)));
+}
+
+TEST(MapTest, ErasingEnoughCausesDownwardRehashOnNextInsert) {
+  for (size_t capacity = 1; capacity < 1000; capacity *= 2) {
+    const size_t max_size = MapTestPeer::CalculateHiCutoff(capacity);
+    for (size_t min_size = 1; min_size < max_size / 4; ++min_size) {
+      Map<int, int> m;
+      while (m.size() < max_size) m[m.size()];
+      const size_t num_buckets = MapTestPeer::NumBuckets(m);
+      while (m.size() > min_size) m.erase(m.size() - 1);
+      // Erasing doesn't shrink the table.
+      ASSERT_EQ(num_buckets, MapTestPeer::NumBuckets(m));
+      // This insertion causes a shrinking rehash because the load factor is too
+      // low.
+      m[99999];
+      size_t new_num_buckets = MapTestPeer::NumBuckets(m);
+      EXPECT_LT(new_num_buckets, num_buckets);
+      EXPECT_LE(m.size(),
+                MapTestPeer::CalculateHiCutoff(MapTestPeer::NumBuckets(m)));
+    }
+  }
 }
 
 // We changed the internal implementation to use a smaller size type, but the

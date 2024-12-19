@@ -7,7 +7,6 @@ pkg_tar(
     srcs = [
         ":protobuf_codegen_files",
         "//:LICENSE",
-        "//rust:vendored_protocs_test",
     ],
     tags = ["manual"],
     visibility = ["//rust:__subpackages__"],
@@ -23,7 +22,7 @@ genrule(
     name = "gen_cargo_toml",
     srcs = ["Cargo-template.toml"],
     outs = ["Cargo.toml"],
-    cmd = "cat $(SRCS) | sed -e 's/{{VERSION}}/{0}-beta/g' > $(OUTS)".format(PROTOBUF_RUST_VERSION),
+    cmd = "cat $(SRCS) | sed -e 's/{{VERSION}}/{0}-beta1/g' > $(OUTS)".format(PROTOBUF_RUST_VERSION),
 )
 
 filegroup(

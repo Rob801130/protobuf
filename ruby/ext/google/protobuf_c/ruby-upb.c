@@ -87,6 +87,13 @@ Error, UINTPTR_MAX is undefined
 #define UPB_INLINE static
 #endif
 
+// UPB_INLINE_IF_NOT_GCC: because gcc can be very noisy at times.
+#if defined(__GNUC__) && !defined(__clang__)
+#define UPB_INLINE_IF_NOT_GCC static
+#else
+#define UPB_INLINE_IF_NOT_GCC UPB_INLINE
+#endif
+
 #ifdef UPB_BUILD_API
 #define UPB_API UPB_EXPORT
 #define UPB_API_INLINE UPB_EXPORT
@@ -457,10 +464,6 @@ void __asan_unpoison_memory_region(void const volatile *addr, size_t size);
 // This macro can be set to enable these API changes ahead of time, so that
 // user code can be updated before upgrading versions of protobuf.
 #ifdef UPB_FUTURE_BREAKING_CHANGES
-
-// Properly enforce closed enums in python.
-// Owner: mkruskal@
-#define UPB_FUTURE_PYTHON_CLOSED_ENUM_ENFORCEMENT 1
 
 #endif
 
@@ -1183,7 +1186,7 @@ static int64_t jsondec_strtoint64(jsondec* d, upb_StringView str) {
 static void jsondec_checkempty(jsondec* d, upb_StringView str,
                                const upb_FieldDef* f) {
   if (str.size != 0) return;
-  d->result = kUpb_JsonDecodeResult_OkWithEmptyStringNumerics;
+  d->result = kUpb_JsonDecodeResult_Error;
   upb_Status_SetErrorFormat(d->status,
                             "Empty string is not a valid number (field: %s). "
                             "This will be an error in a future version.",
@@ -1291,7 +1294,7 @@ static upb_MessageValue jsondec_double(jsondec* d, const upb_FieldDef* f) {
         char* end;
         val.double_val = strtod(str.data, &end);
         if (end != str.data + str.size) {
-          d->result = kUpb_JsonDecodeResult_OkWithEmptyStringNumerics;
+          d->result = kUpb_JsonDecodeResult_Error;
           upb_Status_SetErrorFormat(
               d->status,
               "Non-number characters in quoted number (field: %s). "
@@ -3916,8 +3919,10 @@ static int _upb_mapsorter_cmpext(const void* _a, const void* _b) {
 }
 
 bool _upb_mapsorter_pushexts(_upb_mapsorter* s, const upb_Message_Internal* in,
-                             size_t count, _upb_sortedmap* sorted) {
+                             _upb_sortedmap* sorted) {
+  size_t count = (in->size - in->ext_begin) / sizeof(upb_Extension);
   if (!_upb_mapsorter_resize(s, sorted, count)) return false;
+  if (count == 0) return true;
   const upb_Extension* exts =
       UPB_PTR_AT(in, in->ext_begin, const upb_Extension);
 
@@ -8285,28 +8290,25 @@ static void encode_message(upb_encstate* e, const upb_Message* msg,
       /* Encode all extensions together. Unlike C++, we do not attempt to keep
        * these in field number order relative to normal fields or even to each
        * other. */
-      size_t ext_count = upb_Message_ExtensionCount(msg);
-      if (ext_count) {
-        if (e->options & kUpb_EncodeOption_Deterministic) {
-          _upb_sortedmap sorted;
-          if (!_upb_mapsorter_pushexts(&e->sorter, in, ext_count, &sorted)) {
-            // TODO: b/378744096 - handle alloc failure
-          }
-          const upb_Extension* ext;
-          while (_upb_sortedmap_nextext(&e->sorter, &sorted, &ext)) {
-            encode_ext(e, ext->ext, ext->data,
-                       m->UPB_PRIVATE(ext) == kUpb_ExtMode_IsMessageSet);
-          }
-          _upb_mapsorter_popmap(&e->sorter, &sorted);
-        } else {
-          const upb_MiniTableExtension* ext;
-          upb_MessageValue ext_val;
-          uintptr_t iter = kUpb_Message_ExtensionBegin;
-          while (UPB_PRIVATE(_upb_Message_NextExtensionReverse)(
-              msg, &ext, &ext_val, &iter)) {
-            encode_ext(e, ext, ext_val,
-                       m->UPB_PRIVATE(ext) == kUpb_ExtMode_IsMessageSet);
-          }
+      if (e->options & kUpb_EncodeOption_Deterministic) {
+        _upb_sortedmap sorted;
+        if (!_upb_mapsorter_pushexts(&e->sorter, in, &sorted)) {
+          // TODO: b/378744096 - handle alloc failure
+        }
+        const upb_Extension* ext;
+        while (_upb_sortedmap_nextext(&e->sorter, &sorted, &ext)) {
+          encode_ext(e, ext->ext, ext->data,
+                     m->UPB_PRIVATE(ext) == kUpb_ExtMode_IsMessageSet);
+        }
+        _upb_mapsorter_popmap(&e->sorter, &sorted);
+      } else {
+        const upb_MiniTableExtension* ext;
+        upb_MessageValue ext_val;
+        uintptr_t iter = kUpb_Message_ExtensionBegin;
+        while (UPB_PRIVATE(_upb_Message_NextExtensionReverse)(
+            msg, &ext, &ext_val, &iter)) {
+          encode_ext(e, ext, ext_val,
+                     m->UPB_PRIVATE(ext) == kUpb_ExtMode_IsMessageSet);
         }
       }
     }
@@ -16799,6 +16801,7 @@ upb_ServiceDef* _upb_ServiceDefs_New(upb_DefBuilder* ctx, int n,
 #undef UPB_API
 #undef UPBC_API
 #undef UPB_API_INLINE
+#undef UPB_API_INLINE_IF_NOT_GCC
 #undef UPB_ALIGN_UP
 #undef UPB_ALIGN_DOWN
 #undef UPB_ALIGN_MALLOC
@@ -16847,4 +16850,3 @@ upb_ServiceDef* _upb_ServiceDefs_New(upb_DefBuilder* ctx, int n,
 #undef UPB_LINKARR_START
 #undef UPB_LINKARR_STOP
 #undef UPB_FUTURE_BREAKING_CHANGES
-#undef UPB_FUTURE_PYTHON_CLOSED_ENUM_ENFORCEMENT

@@ -6,7 +6,7 @@
 #
 # Changes to this file will be overwritten based on Bazel definitions.
 
-if(${CMAKE_VERSION} VERSION_GREATER 3.10 OR ${CMAKE_VERSION} VERSION_EQUAL 3.10)
+if(${CMAKE_VERSION} VERSION_GREATER 3.16 OR ${CMAKE_VERSION} VERSION_EQUAL 3.16)
   include_guard()
 endif()
 
@@ -30,6 +30,7 @@ set(rules_shell-version "0.2.0")
 set(googletest-version "1.14.0")
 set(rules_buf-version "0.3.0")
 set(rules_testing-version "0.6.0")
+set(abseil-py-version "2.1.0")
 set(rules_proto-version "4.0.0")
 
 

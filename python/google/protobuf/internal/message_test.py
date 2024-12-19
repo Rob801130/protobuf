@@ -40,7 +40,7 @@ from google.protobuf.internal import test_util
 from google.protobuf.internal import testing_refleaks
 from google.protobuf import descriptor
 from google.protobuf import message
-from google.protobuf.internal import _parameterized
+from absl.testing import parameterized
 from google.protobuf import map_proto2_unittest_pb2
 from google.protobuf import map_unittest_pb2
 from google.protobuf import unittest_pb2
@@ -50,7 +50,7 @@ UCS2_MAXUNICODE = 65535
 
 warnings.simplefilter('error', DeprecationWarning)
 
-@_parameterized.named_parameters(('_proto2', unittest_pb2),
+@parameterized.named_parameters(('_proto2', unittest_pb2),
                                 ('_proto3', unittest_proto3_arena_pb2))
 @testing_refleaks.TestCase
 class MessageTest(unittest.TestCase):
@@ -1456,22 +1456,14 @@ class Proto2Test(unittest.TestCase):
     """Assigning an invalid enum number is not allowed for closed enums."""
     m = unittest_pb2.TestAllTypes()
 
-    # TODO Enable these once upb's behavior is made conformant.
-    if api_implementation.Type() != 'upb':
-      # Can not assign unknown enum to closed enums.
-      with self.assertRaises(ValueError) as _:
-        m.optional_nested_enum = 1234567
-      self.assertRaises(ValueError, m.repeated_nested_enum.append, 1234567)
-      # Assignment is a different code path than append for the C++ impl.
-      m.repeated_nested_enum.append(2)
-      m.repeated_nested_enum[0] = 2
-      with self.assertRaises(ValueError):
-        m.repeated_nested_enum[0] = 123456
-    else:
+    # Can not assign unknown enum to closed enums.
+    with self.assertRaises(ValueError) as _:
       m.optional_nested_enum = 1234567
-      m.repeated_nested_enum.append(1234567)
-      m.repeated_nested_enum.append(2)
-      m.repeated_nested_enum[0] = 2
+    self.assertRaises(ValueError, m.repeated_nested_enum.append, 1234567)
+    # Assignment is a different code path than append for the C++ impl.
+    m.repeated_nested_enum.append(2)
+    m.repeated_nested_enum[0] = 2
+    with self.assertRaises(ValueError):
       m.repeated_nested_enum[0] = 123456
 
     # Unknown enum value can be parsed but is ignored.
@@ -1784,12 +1776,28 @@ class Proto3Test(unittest.TestCase):
     message_proto2 = unittest_pb2.TestAllTypes()
     message_proto2.optional_int32 = 0
     message_proto2.optional_string = ''
+    message_proto2.optional_float = 0.0
     message_proto2.optional_bytes = b''
-    self.assertEqual(len(message_proto2.ListFields()), 3)
+    self.assertEqual(len(message_proto2.ListFields()), 4)
 
     message_proto3 = unittest_proto3_arena_pb2.TestAllTypes()
     message_proto3.ParseFromString(message_proto2.SerializeToString())
     self.assertEqual(len(message_proto3.ListFields()), 0)
+
+  def testProto3ParserKeepsNonDefaultScalar(self):
+    message_proto2 = unittest_pb2.TestAllTypes()
+    message_proto2.optional_int32 = 1
+    message_proto2.optional_string = '\0'
+    message_proto2.optional_float = -0.0
+    message_proto2.optional_double = -0.0
+    message_proto2.optional_bytes = b'\0'
+    self.assertEqual(len(message_proto2.ListFields()), 5)
+    serialized = message_proto2.SerializeToString()
+
+    message_proto3 = unittest_proto3_arena_pb2.TestAllTypes()
+    message_proto3.ParseFromString(serialized)
+    self.assertEqual(len(message_proto3.ListFields()), 5)
+    self.assertEqual(message_proto3.SerializeToString(), serialized)
 
   def testProto3Optional(self):
     msg = test_proto3_optional_pb2.TestProto3Optional()
