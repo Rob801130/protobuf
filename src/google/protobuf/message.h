@@ -91,6 +91,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -103,7 +104,6 @@
 #include "absl/memory/memory.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
-#include "absl/types/optional.h"
 #include "google/protobuf/arena.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/generated_message_reflection.h"
@@ -131,6 +131,7 @@ class MessageFactory;
 
 // Defined in other files.
 class AssignDescriptorsHelper;
+class ConstMapIterator;
 class DynamicMessageFactory;
 class GeneratedMessageReflectionTestHelper;
 class MapKey;
@@ -393,6 +394,7 @@ class PROTOBUF_EXPORT Message : public MessageLite {
   size_t MaybeComputeUnknownFieldsSize(
       size_t total_size, const internal::CachedSize* cached_size) const;
 
+
   // Reflection based version for reflection based types.
   static absl::string_view GetTypeNameImpl(const internal::ClassData* data);
   static void MergeImpl(MessageLite& to, const MessageLite& from);
@@ -632,7 +634,7 @@ class PROTOBUF_EXPORT Reflection final {
     friend class Reflection;
 
     absl::string_view CopyFromCord(const absl::Cord& cord) {
-      if (absl::optional<absl::string_view> flat = cord.TryFlat()) {
+      if (auto flat = cord.TryFlat()) {
         return *flat;
       }
       if (!buffer_) {
@@ -1188,12 +1190,25 @@ class PROTOBUF_EXPORT Reflection final {
   // real element. Mutation to the field may invalidate the iterator.
   MapIterator MapEnd(Message* message, const FieldDescriptor* field) const;
 
+  // Returns a ConstMapIterator referring to the first element in the map field.
+  // If the map field is empty, this function returns the same as
+  // reflection::ConstMapEnd. Mutation to the field may invalidate the iterator.
+  ConstMapIterator ConstMapBegin(const Message* message,
+                                 const FieldDescriptor* field) const;
+
+  // Returns a ConstMapIterator referring to the theoretical element that would
+  // follow the last element in the map field. It does not point to any
+  // real element. Mutation to the field may invalidate the iterator.
+  ConstMapIterator ConstMapEnd(const Message* message,
+                               const FieldDescriptor* field) const;
+
   // Get the number of <key, value> pair of a map field. The result may be
   // different from FieldSize which can have duplicate keys.
   int MapSize(const Message& message, const FieldDescriptor* field) const;
 
   // Help method for MapIterator.
-  friend class MapIterator;
+  template <bool>
+  friend class MapIteratorBase;
   friend class WireFormatForMapFieldTest;
   internal::MapFieldBase* MutableMapData(Message* message,
                                          const FieldDescriptor* field) const;
@@ -1532,7 +1547,7 @@ inline const Message* DynamicCastMessage(const MessageLite* from) {
 }
 template <>
 inline const Message* DownCastMessage(const MessageLite* from) {
-  ABSL_DCHECK(DynamicCastMessage<Message>(from) == from)
+  ABSL_DCHECK_EQ(DynamicCastMessage<Message>(from), from)
       << "Cannot downcast " << from->GetTypeName() << " to Message";
   return static_cast<const Message*>(from);
 }

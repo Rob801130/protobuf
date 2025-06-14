@@ -17,6 +17,7 @@
 #include <limits>
 #include <memory>
 #include <new>
+#include <optional>
 #include <queue>
 #include <string>
 #include <type_traits>
@@ -41,7 +42,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/strings/substitute.h"
 #include "absl/synchronization/mutex.h"
-#include "absl/types/optional.h"
 #include "absl/types/span.h"
 #include "google/protobuf/arenastring.h"
 #include "google/protobuf/compiler/code_generator.h"
@@ -1072,22 +1072,22 @@ bool IsLikelyPresent(const FieldDescriptor* field, const Options& options) {
   return false;
 }
 
-absl::optional<float> GetPresenceProbability(const FieldDescriptor* field,
-                                             const Options& options) {
-  return absl::nullopt;
+std::optional<float> GetPresenceProbability(const FieldDescriptor* field,
+                                            const Options& options) {
+  return std::nullopt;
 }
 
-absl::optional<float> GetFieldGroupPresenceProbability(
+std::optional<float> GetFieldGroupPresenceProbability(
     const std::vector<const FieldDescriptor*>& fields, const Options& options) {
   ABSL_DCHECK(!fields.empty());
-  if (!IsProfileDriven(options)) return absl::nullopt;
+  if (!IsProfileDriven(options)) return std::nullopt;
 
   double all_absent_probability = 1.0;
 
   for (const auto* field : fields) {
-    absl::optional<float> probability = GetPresenceProbability(field, options);
+    std::optional<float> probability = GetPresenceProbability(field, options);
     if (!probability) {
-      return absl::nullopt;
+      return std::nullopt;
     }
     all_absent_probability *= 1.0 - *probability;
   }
@@ -1339,18 +1339,23 @@ bool IsV2EnabledForMessage(const Descriptor* descriptor,
 }
 
 #ifdef PROTOBUF_INTERNAL_V2_EXPERIMENT
+bool IsV2CodegenEnabled(const Options& options) {
+  return !options.opensource_runtime && !options.bootstrap;
+}
+
 bool ShouldGenerateV2Code(const Descriptor* descriptor,
                           const Options& options) {
-  return !options.opensource_runtime && !options.bootstrap &&
+  return IsV2CodegenEnabled(options) &&
          !HasSimpleBaseClass(descriptor, options);
 }
 
 bool IsEligibleForV2Batching(const FieldDescriptor* field) {
   // Non-message fields whose numbers fit into 2B should be considered for
   // batching although the actual batching depends on the current batching, the
-  // payload size, etc.
+  // payload size, etc. Oneof fields are not eligible for batching because they
+  // are handled separately.
   return field->cpp_type() != FieldDescriptor::CPPTYPE_MESSAGE &&
-         !field->is_map() &&
+         field->real_containing_oneof() == nullptr && !field->is_map() &&
          field->number() < std::numeric_limits<uint16_t>::max();
 }
 
@@ -1909,15 +1914,15 @@ bool GetBootstrapBasename(const Options& options, absl::string_view basename,
   }
 
   static const auto* bootstrap_mapping =
-      // TODO Replace these with string_view once we remove
-      // StringPiece.
-      new absl::flat_hash_map<absl::string_view, std::string>{
+      new absl::flat_hash_map<absl::string_view, absl::string_view>{
           {"net/proto2/proto/descriptor",
            "third_party/protobuf/descriptor"},
           {"third_party/protobuf/cpp_features",
            "third_party/protobuf/cpp_features"},
           {"third_party/protobuf/compiler/plugin",
            "third_party/protobuf/compiler/plugin"},
+          {"third_party/protobuf/internal_options",
+           "third_party/protobuf/internal_options_bootstrap"},
           {"net/proto2/compiler/proto/profile",
            "net/proto2/compiler/proto/profile_bootstrap"},
       };
@@ -1926,7 +1931,7 @@ bool GetBootstrapBasename(const Options& options, absl::string_view basename,
     *bootstrap_basename = std::string(basename);
     return false;
   } else {
-    *bootstrap_basename = iter->second;
+    *bootstrap_basename = std::string(iter->second);
     return true;
   }
 }
@@ -2155,7 +2160,7 @@ bool HasMessageFieldOrExtension(const Descriptor* desc) {
 
 std::vector<io::Printer::Sub> AnnotatedAccessors(
     const FieldDescriptor* field, absl::Span<const absl::string_view> prefixes,
-    absl::optional<google::protobuf::io::AnnotationCollector::Semantic> semantic) {
+    std::optional<google::protobuf::io::AnnotationCollector::Semantic> semantic) {
   auto field_name = FieldName(field);
 
   std::vector<io::Printer::Sub> vars;

@@ -53,6 +53,16 @@ def _github_archive(repo, commit, **kwargs):
 def protobuf_deps():
     """Loads common dependencies needed to compile the protobuf library."""
 
+    # Pin rules_proto since Bazel 7 otherwise depends on rules_proto 5.3.0-21.7 which is missing
+    # @rules_proto//proto:toolchain_type used by Bazel.
+    # 6.0.0 would at least require users to add `register_toolchains` for rules_proto
+    # TODO: Remove once Bazel 7 is no longer supported.
+    if not native.existing_rule("rules_proto"):
+        http_archive(
+            name = "rules_proto",
+            strip_prefix = "rules_proto-7.1.0",
+            url = "https://github.com/bazelbuild/rules_proto/releases/download/7.1.0/rules_proto-7.1.0.tar.gz",
+        )
     if not native.existing_rule("bazel_features"):
         http_archive(
             name = "bazel_features",
@@ -131,9 +141,9 @@ def protobuf_deps():
     if not native.existing_rule("rules_python"):
         http_archive(
             name = "rules_python",
-            sha256 = "4f7e2aa1eb9aa722d96498f5ef514f426c1f55161c3c9ae628c857a7128ceb07",
-            strip_prefix = "rules_python-1.0.0",
-            url = "https://github.com/bazelbuild/rules_python/releases/download/1.0.0/rules_python-1.0.0.tar.gz",
+            sha256 = "9c6e26911a79fbf510a8f06d8eedb40f412023cf7fa6d1461def27116bff022c",
+            strip_prefix = "rules_python-1.1.0",
+            url = "https://github.com/bazelbuild/rules_python/releases/download/1.1.0/rules_python-1.1.0.tar.gz",
         )
 
     if not native.existing_rule("system_python"):
@@ -145,9 +155,9 @@ def protobuf_deps():
     if not native.existing_rule("rules_jvm_external"):
         http_archive(
             name = "rules_jvm_external",
-            strip_prefix = "rules_jvm_external-6.3",
-            sha256 = "c18a69d784bcd851be95897ca0eca0b57dc86bb02e62402f15736df44160eb02",
-            url = "https://github.com/bazelbuild/rules_jvm_external/releases/download/6.3/rules_jvm_external-6.3.tar.gz",
+            strip_prefix = "rules_jvm_external-6.7",
+            sha256 = "a1e351607f04fed296ba33c4977d3fe2a615ed50df7896676b67aac993c53c18",
+            url = "https://github.com/bazelbuild/rules_jvm_external/releases/download/6.7/rules_jvm_external-6.7.tar.gz",
         )
 
     if not native.existing_rule("rules_pkg"):
