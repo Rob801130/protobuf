@@ -77,13 +77,13 @@ cc_library(
         "//upb_generator:__subpackages__",
     ],
     deps = [
-        ":base",
-        ":mem",
-        ":message",
-        ":mini_descriptor",
-        ":mini_table",
-        ":wire",
+        "//upb/base",
+        "//upb/mem",
+        "//upb/message",
         "//upb/message:internal",
+        "//upb/mini_descriptor",
+        "//upb/mini_table",
+        "//upb/wire",
     ] + select({
         ":fasttable_enabled_setting": [
             "//upb/wire/decode_fast:field_parsers",
@@ -264,6 +264,8 @@ upb_amalgamation(
         "//upb/text:debug",
         "//upb/text:internal",
         "//upb/wire:decoder",
+        "//upb/wire:reader_internal",
+        "//upb/wire:writer",
     ],
     strip_import_prefix = ["src"],
     visibility = ["//rust:__pkg__"],
@@ -314,6 +316,8 @@ upb_amalgamation(
         "//upb/reflection:descriptor_upb_proto",
         "//upb/reflection:internal",
         "//upb/wire:decoder",
+        "//upb/wire:reader_internal",
+        "//upb/wire:writer",
     ],
     prefix = "php-",
     strip_import_prefix = ["src"],
@@ -365,6 +369,8 @@ upb_amalgamation(
         "//upb/reflection:internal",
         "//upb/util:def_to_proto",
         "//upb/wire:decoder",
+        "//upb/wire:reader_internal",
+        "//upb/wire:writer",
     ],
     prefix = "ruby-",
     strip_import_prefix = ["src"],
@@ -423,11 +429,16 @@ filegroup(
     visibility = ["//pkg:__pkg__"],
 )
 
-filegroup(
+cc_library(
     name = "test_util",
-    srcs = [
-        "//upb/test:test_util",
-        "//upb/util:test_util",
-    ],
+    testonly = True,
     visibility = ["//pkg:__pkg__"],
+    deps = [
+        "//upb/test:fuzz_util",
+        "//upb/test:parse_text_proto",
+        "//upb/util:def_to_proto_test_lib",
+        "//upb/wire/test_util:field_types",
+        "//upb/wire/test_util:make_mini_table",
+        "//upb/wire/test_util:wire_message",
+    ],
 )

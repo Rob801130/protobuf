@@ -59,6 +59,11 @@
 // Stores the field number of the present value of the oneof
 #define kUpb_OneOf_CaseFieldRep (kUpb_FieldRep_4Byte)
 
+// The maximum field number that can be encoded on the wire.
+// Note that this limit does not apply to MessageSet, which can have field
+// numbers up to INT32_MAX.
+#define kUpb_MaxFieldNumber ((1 << 29) - 1)
+
 typedef struct {
   // Index of the corresponding field. The field's offset will be the index of
   // the next field in a linked list.
@@ -423,15 +428,21 @@ static const char* upb_MtDecoder_ParseModifier(upb_MtDecoder* d,
   return ptr;
 }
 
+static void* upb_MtDecoder_CheckedMalloc(upb_MtDecoder* d, size_t size) {
+  void* ptr = upb_Arena_Malloc(d->arena, size);
+  upb_MdDecoder_CheckOutOfMemory(&d->base, ptr);
+  return ptr;
+}
+
 static void upb_MtDecoder_AllocateSubs(upb_MtDecoder* d,
                                        upb_SubCounts sub_counts) {
   uint32_t total_count = sub_counts.submsg_count + sub_counts.subenum_count;
   size_t subs_bytes = sizeof(*d->table.UPB_PRIVATE(subs)) * total_count;
   size_t ptrs_bytes = sizeof(upb_MiniTable*) * sub_counts.submsg_count;
-  upb_MiniTableSubInternal* subs = upb_Arena_Malloc(d->arena, subs_bytes);
-  const upb_MiniTable** subs_ptrs = upb_Arena_Malloc(d->arena, ptrs_bytes);
-  upb_MdDecoder_CheckOutOfMemory(&d->base, subs);
-  upb_MdDecoder_CheckOutOfMemory(&d->base, subs_ptrs);
+  upb_MiniTableSubInternal* subs =
+      subs_bytes ? upb_MtDecoder_CheckedMalloc(d, subs_bytes) : NULL;
+  const upb_MiniTable** subs_ptrs =
+      ptrs_bytes ? upb_MtDecoder_CheckedMalloc(d, ptrs_bytes) : NULL;
   uint32_t i = 0;
   for (; i < sub_counts.submsg_count; i++) {
     subs_ptrs[i] = UPB_PRIVATE(_upb_MiniTable_Empty)();
@@ -473,7 +484,12 @@ static const char* upb_MtDecoder_Parse(upb_MtDecoder* d, const char* ptr,
       upb_MiniTableField* field = fields;
       *field_count += 1;
       fields = (char*)fields + field_size;
-      field->UPB_PRIVATE(number) = ++last_field_number;
+      uint32_t number = ++last_field_number;
+      if (number == 0 || (number > kUpb_MaxFieldNumber && !d->is_extension)) {
+        upb_MdDecoder_ErrorJmp(&d->base, "Invalid field number: %" PRIu32,
+                               number);
+      }
+      field->UPB_PRIVATE(number) = number;
       last_field = field;
       upb_MiniTable_SetField(d, ch, field, msg_modifiers, sub_counts);
     } else if (kUpb_EncodedValue_MinModifier <= ch &&
